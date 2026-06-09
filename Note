@@ -1,0 +1,24 @@
+DONE
+
+- implement direction detection for move and calculate step counter accordingly done
+- detect when to stop in update_velocity_profile done
+- check for x and y boundary in command_interpreter done
+- add x and y boundary done
+- set up logic to drive the motor every interupt done
+- test the movement base on the check point create by claude
+- check the pulse pin work after confirming that the logic work
+
+
+NEED TO BE DONE
+
+- implement choosing an elbow config for a move
+- check moving speed once implement the motor
+- implement homing sequence, how to home if lose power mid move
+- set up the graph on the pi to run demo scarabot graph
+- order stuff to start wiring the motor driver to the microcontroller
+
+TOP PRIORITY
+
+- set up uart and configure the motor driver
+- set up enable pin
+
