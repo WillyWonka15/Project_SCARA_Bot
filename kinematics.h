@@ -36,9 +36,13 @@ typedef struct {
 extern volatile JointAngles_t joints;
 
 //return true if coordinate are reachable
+void kinematics_compute_FK(float theta1, float theta2, float *x, float *y);
+
 bool kinematics_compute_IK(float x, float y, float *theta1, float *theta2, int sign);
 
 bool joints_in_limit(float *theta1, float *theta2);
+
+float angleDiff(float target, float current);
 
 bool solve_auto_config(float x, float y, volatile JointAngles_t *joints);
 

@@ -13,7 +13,7 @@
 void timer1_Initialize(){
 
     // period count from N to 0 so it's N+1
-    long period_count = SYS_CLK/TIMER1_FREQ - 1;
+    long period_count = DEVICE_SYSCLK_FREQ /TIMER1_FREQ - 1;
     CPUTimer_stopTimer(CPUTIMER1_BASE);          // stop before configuring
     CPUTimer_setPreScaler(CPUTIMER1_BASE, 0);    // no prescaler
     CPUTimer_setPeriod(CPUTIMER1_BASE, period_count);   // set period

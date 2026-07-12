@@ -14,11 +14,11 @@
 
 
 #define MAX_CHAR_ARG 100
-#define MAX_ARG 2
+#define MAX_ARG 3
 #define CMD0 "MOVE"
 #define CMD1 "HOME"
 #define CMD2 "USER_DRIVE"
-#define CMD0_NARGS 2
+#define CMD0_NARGS 3
 #define CMD1_NARGS 0
 #define CMD2_NARGS 1
 #define X_MAX_RANGE_POS 50

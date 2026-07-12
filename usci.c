@@ -9,7 +9,6 @@
 #include "usci.h"
 #include "system.h"
 #include<strings.h>
-#include"gpio_init.h"
 #include<stdio.h>
 
 /*Function: usciInit
@@ -30,7 +29,7 @@ void SCIA_initialize(void)
     SCI_disableFIFO(SCIA_BASE);
 
     //Configured the SCI module using built in function from driverlib.h
-    SCI_setConfig(SCIA_BASE, LSPCLK, BAUD,
+    SCI_setConfig(SCIA_BASE, SysCtl_getLowSpeedClock(DEVICE_OSCSRC_FREQ), BAUD,
                   SCI_CONFIG_WLEN_8 | SCI_CONFIG_STOP_ONE | SCI_CONFIG_PAR_NONE);
 
     SCI_disableLoopback(SCIA_BASE);
@@ -50,7 +49,7 @@ void SCIB_initialize(void)
     SCI_performSoftwareReset(SCIB_BASE);
 
     //Configured the SCI module using built in function from driverlib.h
-    SCI_setConfig(SCIB_BASE, LSPCLK, BAUD,
+    SCI_setConfig(SCIB_BASE, SysCtl_getLowSpeedClock(DEVICE_OSCSRC_FREQ), BAUD,
                  SCI_CONFIG_WLEN_8 | SCI_CONFIG_STOP_ONE| SCI_CONFIG_PAR_NONE);
 
     // enable FIFO
@@ -164,6 +163,59 @@ int16_t SCIA_RXstr(char *rxStr){
     SCI_resetChannels(SCIA_BASE);
     return ret;
 }
+
+/*Function: SCIA_GPIOinit
+ * - initialize the GPIO pin for SCIA module
+ * Argument: NONE
+ * Return: NONE
+ *
+ *
+ * Author: WN
+ * Date: 2026/03/26
+ * */
+void SCIA_GPIOinit(void)
+{  
+    // set controller core
+    GPIO_setControllerCore(42,GPIO_CORE_CPU1);
+    GPIO_setControllerCore(43,GPIO_CORE_CPU1);
+
+    //Set pin to peripheral mode
+    GPIO_setPinConfig(GPIO_42_SCITXDA);
+    GPIO_setPinConfig(GPIO_43_SCIRXDA);
+
+    //set pin direction 
+    GPIO_setDirectionMode(42, GPIO_DIR_MODE_OUT);
+    GPIO_setDirectionMode(43, GPIO_DIR_MODE_IN);
+    
+    //set pin as floating i/p and o/p
+    GPIO_setPadConfig(42, GPIO_PIN_TYPE_STD);
+    GPIO_setPadConfig(43, GPIO_PIN_TYPE_STD);
+}
+
+
+void SCIB_GPIOinit(void)
+{  
+    // set controller core
+    GPIO_setControllerCore(18,GPIO_CORE_CPU1);
+    GPIO_setControllerCore(19,GPIO_CORE_CPU1);
+
+    //Set pin to peripheral mode
+    GPIO_setPinConfig(GPIO_18_SCITXDB);
+    GPIO_setPinConfig(GPIO_19_SCIRXDB);
+
+    //set pin direction 
+    GPIO_setDirectionMode(18, GPIO_DIR_MODE_OUT);
+    GPIO_setDirectionMode(19, GPIO_DIR_MODE_IN);
+    
+    //set pin as floating i/p and o/p
+    GPIO_setPadConfig(18, GPIO_PIN_TYPE_STD);
+    GPIO_setPadConfig(19, GPIO_PIN_TYPE_STD);
+
+    //qualification mode 
+    GPIO_setQualificationMode(18, GPIO_QUAL_ASYNC);
+    GPIO_setQualificationMode(19, GPIO_QUAL_ASYNC);
+}
+
 /*Function: ANSIsequence
  * - execute ANSI sequence on UART interface
  * Argument: mode

@@ -44,20 +44,20 @@ void command_Inittialize(CMD *cmdList) {
 void command_Selection(void) {
   char buffer[MAX_CHAR_ARG] = {0};
   // Clean the screen everytime running
-  // ANSI_sequence(CLEAR_SCREEN_SEQUENCE);
-  // ANSI_sequence(CURSOR_HOME_SEQUENCE);
+  ANSI_sequence(CLEAR_SCREEN_SEQUENCE);
+  ANSI_sequence(CURSOR_HOME_SEQUENCE);
 
   strcpy(buffer, "Please choose from the list of the following commands:");
   SCIA_TXstr(buffer);
   ANSI_sequence(CURSOR_DOWN_1LINE);
   ANSI_sequence(CURSOR_DOWN_1LINE);
 
-  strcpy(buffer, "MOVE X_coordinate, Y_coordinate");
+  strcpy(buffer, "MOVE X_coordinate, Y_coordinate, Z_coordinate");
   SCIA_TXstr(buffer);
   ANSI_sequence(CURSOR_DOWN_1LINE);
 
   strcpy(buffer,
-         "Function: allow user to move TCP to their desire x & y coordiate.");
+         "Function: allow user to move TCP to their desire x & y & z coordiate.");
   SCIA_TXstr(buffer);
   ANSI_sequence(CURSOR_DOWN_1LINE);
   ANSI_sequence(CURSOR_DOWN_1LINE);

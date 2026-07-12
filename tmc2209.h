@@ -35,8 +35,8 @@
 #define TMC1_DIR_PIN 4
 #define TMC1_EN_PIN 5
 
-#define MOTOR_CW 0
-#define MOTOR_CCW 1
+#define MOTOR_CW 1
+#define MOTOR_CCW 0
 //
 // Function declarations
 //

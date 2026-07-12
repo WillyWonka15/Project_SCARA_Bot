@@ -40,6 +40,21 @@ float beta = atan2f(LINK_2_MM * sinf(*theta2), LINK_1_MM + LINK_2_MM * cosf(*the
  return true;   
 }
 
+
+void kinematics_compute_FK(float theta1, float theta2, float *x, float *y){
+    *x = LINK_1_MM * cosf(theta1) + LINK_2_MM * cosf(theta1 + theta2);
+    *y = LINK_1_MM * sinf(theta1) + LINK_2_MM * sinf(theta1 + theta2);
+}
+
+
+float angleDiff(float target, float current) {
+    float diff = target - current;
+    // wrap to -180° to +180°
+    while (diff >  M_PI) diff -= 2.0f * M_PI;
+    while (diff < -M_PI) diff += 2.0f * M_PI;
+    return diff;
+}
+
 bool solve_auto_config(float x, float y, volatile JointAngles_t *joints)
 {
     float theta1_down = 0.0f;
@@ -69,13 +84,13 @@ bool solve_auto_config(float x, float y, volatile JointAngles_t *joints)
         joints->prev_theta1 = joints-> theta1;
         joints->prev_theta2 = joints-> theta2;
         joints->prev_elbow_config = joints->elbow_config;
-        if(joints->prev_elbow_config == ELBOW_UP)
+        if(joints->elbow_config == ELBOW_UP)
         {
             joints->theta1 = theta1_up;
             joints->theta2 = theta2_up;
             joints->elbow_config = ELBOW_UP;
         }
-        else if(joints->prev_elbow_config == ELBOW_DOWN)
+        else if(joints->elbow_config == ELBOW_DOWN)
         {
             joints->theta1 = theta1_down;
             joints->theta2 = theta2_down;

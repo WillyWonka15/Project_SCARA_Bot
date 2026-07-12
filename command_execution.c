@@ -24,8 +24,6 @@ int command_execute(CMD *cmdList, int index) {
 
   switch (index) {
   case INDEX_MOVE: {
-    // enable motor driver
-    tmc_enable(MOTOR_1);
 
     // compute the joint angle from user x and y
     bool i = solve_auto_config(cmdList[index].args[0], cmdList[index].args[1],
@@ -40,18 +38,12 @@ int command_execute(CMD *cmdList, int index) {
     // loop until both joint have stop moving
     while (joint1.is_moving || joint2.is_moving) {
     }
-    // disnable motor driver
-    tmc_disable(MOTOR_1);
+    //
     float theta1 = joint1.total_steps * MOTOR_ANGLE_RESOLUTION;
     float theta2 = joint2.total_steps * MOTOR_ANGLE_RESOLUTION;
     move_complete(&joint1, &joint2, &joints);
     sprintf(buffer, "\r\nDone moving\r\n");
     SCIA_TXstr(buffer);
-    /*sprintf(buffer, "Joint 1 angle: %f\r\n", theta1);
-    SCIA_TXstr(buffer);
-    sprintf(buffer, "Joint 2 angle: %f\r\n", theta2);
-    SCIA_TXstr(buffer);*/
-
     break;
   }
   case INDEX_HOME: {
