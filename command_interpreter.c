@@ -20,16 +20,16 @@ void command_Inittialize(CMD *cmdList) {
   // initialize the command name
   cmdList[INDEX_MOVE].name = CMD0;
   cmdList[INDEX_HOME].name = CMD1;
-  cmdList[INDEX_USER_DRIVE].name = CMD2;
+  cmdList[INDEX_JOG].name = CMD2;
   // initialize the number of arguments in each command
   cmdList[INDEX_MOVE].nargs = CMD0_NARGS;
   cmdList[INDEX_HOME].nargs = CMD1_NARGS;
-  cmdList[INDEX_USER_DRIVE].nargs = CMD2_NARGS;
+  cmdList[INDEX_JOG].nargs = CMD2_NARGS;
   // initialize the argument array
   for (i = 0; i < MAX_ARG; i++) {
     cmdList[INDEX_MOVE].args[i] = 0;
     cmdList[INDEX_HOME].args[i] = 0;
-    cmdList[INDEX_USER_DRIVE].args[i] = 0;
+    cmdList[INDEX_JOG].args[i] = 0;
   }
 }
 /*Function: command_selection
@@ -100,7 +100,7 @@ int command_Parser(CMD *cmdList, char *userInput) {
   // local variable
   int i = 0;
   int index = 0;
-  long val = 0;
+  float val = 0;
   // local variable use for tokenization
   char seps[] = " ";
   char *tok = NULL;
@@ -145,7 +145,7 @@ int command_Parser(CMD *cmdList, char *userInput) {
     // if found something, continue to validate it
     else {
       errno = 0; // 
-      val = strtol(tok, &pEnd, 10);
+      val = strtof(tok, &pEnd);
       // check if there are extra character behind
       if (*pEnd != '\0') {
         errorCode = PARSE_INVALID_ARG;
@@ -181,7 +181,7 @@ int command_Parser(CMD *cmdList, char *userInput) {
         }
       }*/
       // store agument once pass validation
-      cmdList[index].args[i] = (float)val;
+      cmdList[index].args[i] = val;
     }
   }
   return index;
@@ -324,14 +324,8 @@ int argument_Validate(long val, int index)
   i= 0;
   break;
 
-  case INDEX_USER_DRIVE:
-  if (val > 0 && val <= 100)
-  {
-    i = 0;
-  }
-  else {
-    i = 1;
-  }
+  case INDEX_JOG:
+  i = 0;
   break;
   }
 return i;

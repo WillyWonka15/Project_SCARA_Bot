@@ -12,12 +12,15 @@
 #define LINK_1_MM (300.0f)
 #define LINK_2_MM (300.0f)
 
-// Safety Limits for Testing
-#define THETA1_MIN_RAD  (-150.0f * M_PI/180.0f)   // -150 degrees
-#define THETA1_MAX_RAD  (150.0f * M_PI/180.0f)   // +150 degrees
+// Safety Limits
+#define THETA1_MIN_RAD  (-120.0f * M_PI/180.0f)   // -120 degrees
+#define THETA1_MAX_RAD  (120.0f * M_PI/180.0f)   // +12 b0 degrees
 
 #define THETA2_MIN_RAD  (-145.0f * M_PI/180.0f)   //  -145 degrees 
 #define THETA2_MAX_RAD  (145.0f * M_PI/180.0f)    // 145 degrees 
+
+#define Z_MAX_MM (300.0f)
+#define Z_MIN_MM (0.0f)
 
 #define X_MAX  (270)
 

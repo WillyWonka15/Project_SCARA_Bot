@@ -27,15 +27,57 @@ uint16_t tmc_crc(uint16_t *data, uint16_t len) {
 }
 // Returns the STEP pin for a given driver index
 static uint32_t get_step_pin(uint16_t driver) {
-  return (driver == 0) ? TMC0_STEP_PIN : TMC1_STEP_PIN;
+  uint32_t pin = 0;
+  switch (driver) {
+  case MOTOR_1:
+    pin = TMC0_STEP_PIN;
+    break;
+
+  case MOTOR_2:
+    pin = TMC1_STEP_PIN;
+    break;
+
+  case MOTOR_Z:
+    pin = TMC2_STEP_PIN;
+    break;
+  }
+  return pin;
 }
 
 static uint32_t get_dir_pin(uint16_t driver) {
-  return (driver == 0) ? TMC0_DIR_PIN : TMC1_DIR_PIN;
+  uint32_t pin = 0;
+  switch (driver) {
+  case MOTOR_1:
+    pin = TMC0_DIR_PIN;
+    break;
+
+  case MOTOR_2:
+    pin = TMC1_DIR_PIN;
+    break;
+
+  case MOTOR_Z:
+    pin = TMC2_DIR_PIN;
+    break;
+  }
+  return pin;
 }
 
 static uint32_t get_en_pin(uint16_t driver) {
-  return (driver == 0) ? TMC0_EN_PIN : TMC1_EN_PIN;
+  uint32_t pin = 0;
+  switch (driver) {
+  case MOTOR_1:
+    pin = TMC0_EN_PIN;
+    break;
+
+  case MOTOR_2:
+    pin = TMC1_EN_PIN;
+    break;
+
+  case MOTOR_Z:
+    pin = TMC2_EN_PIN;
+    break;
+  }
+  return pin;
 }
 
 // ─────────────────────────────────────────
@@ -43,10 +85,11 @@ static uint32_t get_en_pin(uint16_t driver) {
 // ─────────────────────────────────────────
 
 void tmc_gpio_init(void) {
-  uint32_t pins[6] = {TMC0_STEP_PIN, TMC0_DIR_PIN, TMC0_EN_PIN,
-                      TMC1_STEP_PIN, TMC1_DIR_PIN, TMC1_EN_PIN};
+  uint32_t pins[9] = {TMC0_STEP_PIN, TMC0_DIR_PIN, TMC0_EN_PIN,
+                      TMC1_STEP_PIN, TMC1_DIR_PIN, TMC1_EN_PIN,
+                      TMC2_STEP_PIN, TMC2_DIR_PIN, TMC2_EN_PIN};
   uint16_t i;
-  for (i = 0; i < 6; i++) {
+  for (i = 0; i < 9; i++) {
     GPIO_setDirectionMode(pins[i], GPIO_DIR_MODE_OUT);
     GPIO_setPadConfig(pins[i], GPIO_PIN_TYPE_STD);
     GPIO_writePin(pins[i], 0);
@@ -55,6 +98,7 @@ void tmc_gpio_init(void) {
   // Disable both drivers on startup (EN active LOW, so write HIGH = disabled)
   GPIO_writePin(TMC0_EN_PIN, 1);
   GPIO_writePin(TMC1_EN_PIN, 1);
+  GPIO_writePin(TMC2_EN_PIN, 1);
 }
 
 // ─────────────────────────────────────────
@@ -100,7 +144,8 @@ uint32_t tmc_read_reg(uint16_t addr, uint16_t reg) {
     SCI_writeCharBlockingFIFO(SCIB_BASE, packet[i]);
 
   // Step 4 — wait for TX to fully complete
-  while (SCI_getTxFIFOStatus(SCIB_BASE) != SCI_FIFO_TX0);
+  while (SCI_getTxFIFOStatus(SCIB_BASE) != SCI_FIFO_TX0)
+    ;
   DEVICE_DELAY_US(100); // last byte stop bit + SENDDELAY
 
   // Step 5 — read ALL 12 bytes together (4 echo + 8 response)
@@ -115,7 +160,7 @@ uint32_t tmc_read_reg(uint16_t addr, uint16_t reg) {
     }
     buffer[i] = SCI_readCharBlockingFIFO(SCIB_BASE);
   }
-  
+
   // Sanity check before extracting value
   if (buffer[5] != 0xFF)
     return 0xDEADBEEF; // not a valid reply

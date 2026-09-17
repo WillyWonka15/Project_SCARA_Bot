@@ -7,6 +7,7 @@
 //
 #define TMC_ADDR_0 0x00 // MS1=GND, MS2=GND
 #define TMC_ADDR_1 0x01 // MS1=3.3V, MS2=GND
+#define TMC_ADDR_Z 0x02 // MS1=GND, MS2=3.3V
 
 //
 // Register addresses
@@ -17,6 +18,7 @@
 #define TMC_REG_CHOPCONF 0x6C
 #define TMC_REG_SGTHRS 0x40
 #define TMC_REG_PWMCONF 0x70
+#define TMC_REG_NODECONF 0x03
 
 
 
@@ -28,15 +30,30 @@
 #define TMC0_STEP_PIN 0
 #define TMC0_DIR_PIN 1
 #define TMC0_EN_PIN 2
+#define TMC0_HOME_DIR 0
 
 // Driver 2
 #define MOTOR_2 1
 #define TMC1_STEP_PIN 3
 #define TMC1_DIR_PIN 4
 #define TMC1_EN_PIN 5
+#define TMC1_HOME_DIR 0
+
+// Driver 3
+#define MOTOR_Z 2
+#define TMC2_STEP_PIN 67
+#define TMC2_DIR_PIN 111
+#define TMC2_EN_PIN 60
+#define TMC2_HOME_DIR 0
 
 #define MOTOR_CW 1
 #define MOTOR_CCW 0
+
+// Per-axis direction inversion (for upside-down mounts)
+#define J1_DIR_INVERT  1    // J1 motor mounted upside down
+#define J2_DIR_INVERT  1    // J2 motor mounted upside down
+#define Z_DIR_INVERT   0    // Z normal
+
 //
 // Function declarations
 //

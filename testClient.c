@@ -7,11 +7,11 @@
  *
  */
 #include "command_execution.h"
-#include "motion_planner.h"
 #include "system.h"
 #include "timer.h"
 #include "tmc2209.h"
 #include "usci.h"
+#include "homing_gpio.h"
 #include <stddef.h>
 
 void main(void) {
@@ -34,61 +34,43 @@ void main(void) {
   //
   Interrupt_register(INT_TIMER1, &cpuTimer1_ISR);
   //
-  Interrupt_enable(INT_TIMER1);
+  Interrupt_register(INT_TIMER0, &cpuTimer0_ISR);
 
   // initialize timer1 for velocity profile
   timer1_Initialize();
+  
+  // initialize timer0 for sampling limit switch reading
+  timer0_Initialize();
+
 
   // initialize SCIA module for UART to laptop
   SCIA_initialize();
-  // initialize SCIB module for UART to laptop
+  // initialize SCIB module for motor control
   SCIB_initialize();
 
-  // initialize pin use to communicate with tmc2209
-  tmc_gpio_init();
-  // Step 1 — enable UART interface
-  // PDN_DISABLE bit 6 = 1 + Spreadcycle
-  tmc_write_reg(0x00, TMC_REG_GCONF, 0x00000044);
-  DEVICE_DELAY_US(100);
+  // inititialize GPIO use for homing
+  homing_gpio_initialize();
 
-  // NODECONF register 0x03
-  // SENDDELAY bits [7:4] — set to 2 = 8 bit times delay
-  tmc_write_reg(0x00, 0x03, 0x00000200);
-  DEVICE_DELAY_US(100);
-
-  uint16_t ifcnt_before = tmc_verify_uart(TMC_ADDR_0);
-  DEVICE_DELAY_US(100);
-
-  tmc_set_current(TMC_ADDR_0, 26, 13);
-  DEVICE_DELAY_US(100);
-
-  // 1/8 microstep
-  tmc_set_microsteps(TMC_ADDR_0, 5);
-  DEVICE_DELAY_US(100);
-
-  // Read IFCNT after writes — should be higher than before
-  uint16_t ifcnt_after = tmc_verify_uart(TMC_ADDR_0);
-  DEVICE_DELAY_US(100);
-
-  // reset step pin
-  GPIO_writePin(TMC0_STEP_PIN, 0);
-
-  // default dir pin to CW
-  GPIO_writePin(TMC0_DIR_PIN, MOTOR_CCW);
-
-  // testing the command interpreter engine
   // local variable
   CMD cmdList[NUM_COMMANDS];
   int index = -1;
   int inputError = -1;
   char userInput[MAX_CHAR_ARG] = {0};
 
-  // initialize command
+  // initialize data struct
   command_Inittialize(cmdList);
-  //
-  motion_profile_initialize(&joint1, &joint2);
-  //
+
+  // initialize motion profile, information for each axis
+  motion_profile_initialize(axes);
+
+  // initialize coordinate tracking
+  coordinate_initialize(&coordinate);
+
+  // initialize joints angle tracking
   joint_angle_initialize(&joints);
+
+  // initialize motor driver board
+  motor_drivers_initialize(axes);
 
   // initialize global interrupt
   Interrupt_enableGlobal();
@@ -113,7 +95,6 @@ void main(void) {
     command_execute(cmdList, index);
     DEVICE_DELAY_US(1000000);
   }
-
 }
 
 // testing single motor
@@ -125,18 +106,18 @@ void main(void) {
   Device_init();
   Board_init();
 
-  Interrupt_enablePIE();
+  //Interrupt_enablePIE();
   //
-  Interrupt_initModule();
+  //Interrupt_initModule();
   //
-  Interrupt_initVectorTable();
+  //Interrupt_initVectorTable();
   //
-  Interrupt_register(INT_TIMER1, &cpuTimer1_ISR);
+  //Interrupt_register(INT_TIMER1, &cpuTimer1_ISR);
   //
-  Interrupt_enable(INT_TIMER1);
+  //Interrupt_enable(INT_TIMER1);
 
   // initialize timer1 for velocity profile
-  timer1_Initialize();
+  //timer1_Initialize();
 
   // initialize SCIA module for UART to laptop
   SCIA_initialize();
@@ -147,42 +128,48 @@ void main(void) {
 
   // Step 1 — enable UART interface
   // PDN_DISABLE bit 6 = 1 + Spreadcycle
-  tmc_write_reg(0x00, TMC_REG_GCONF, 0x00000044);
+  tmc_write_reg(TMC_ADDR_1, TMC_REG_GCONF, 0x000000C4);
   DEVICE_DELAY_US(100);
 
   // NODECONF register 0x03
   // SENDDELAY bits [7:4] — set to 2 = 8 bit times delay
-  tmc_write_reg(0x00, 0x03, 0x00000200);
+  tmc_write_reg(TMC_ADDR_1, 0x03, 0x00000200);
   DEVICE_DELAY_US(100);
 
-  uint16_t ifcnt_before = tmc_verify_uart(TMC_ADDR_0);
+  uint16_t ifcnt_before = tmc_verify_uart(TMC_ADDR_1);
   DEVICE_DELAY_US(100);
 
-  tmc_set_current(TMC_ADDR_0, 26, 13);
+  tmc_set_current(TMC_ADDR_1, 26, 13);
   DEVICE_DELAY_US(100);
 
   // 1/8 microstep
-  tmc_set_microsteps(TMC_ADDR_0, 5);
+  tmc_set_microsteps(TMC_ADDR_1, 5);
   DEVICE_DELAY_US(100);
 
   // Read IFCNT after writes — should be higher than before
-  uint16_t ifcnt_after = tmc_verify_uart(TMC_ADDR_0);
+  uint16_t ifcnt_after = tmc_verify_uart(TMC_ADDR_1);
   DEVICE_DELAY_US(100);
 
   // reset step pin
-  GPIO_writePin(TMC0_STEP_PIN, 0);
+  GPIO_writePin(TMC1_STEP_PIN, 0);
 
   // default dir pin to CW
-  GPIO_writePin(TMC0_DIR_PIN, MOTOR_CCW);
+  GPIO_writePin(TMC1_DIR_PIN, MOTOR_CCW);
+
+  // 1. Read CHOPCONF
+  uint32_t chopconf = tmc_read_reg(TMC_ADDR_1, TMC_REG_CHOPCONF);
+
+  // 2. Extract mres (bits 27:24)
+  uint16_t mres = (chopconf >> 24) & 0x0F;
 
   // testing
-  tmc_enable(MOTOR_1);
+  //tmc_enable(MOTOR_2);
 
   // initialize global interrupt
-  Interrupt_enableGlobal();
-  ERTM; // enable real time interrupt
+  //Interrupt_enableGlobal();
+  //ERTM; // enable real time interrupt
 
-  DEVICE_DELAY_US(5000000);
+  //DEVICE_DELAY_US(5000000);
 
-  tmc_disable(MOTOR_1);
+  //tmc_disable(MOTOR_2);
 }*/

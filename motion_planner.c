@@ -4,14 +4,11 @@
 #include "tmc2209.h"
 #include <math.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 static const float DT = (1.0f / TIMER1_FREQ);
-volatile MotionProfile joint1;
-volatile MotionProfile joint2;
-// volatile bool step_state_joint1 = false;
-// volatile bool step_state_joint2 = false;
-//  static float step_accumulator_j1 = 0.0f;
-//  static float step_accumulator_j2 = 0.0f;
+volatile MotionProfile axes[NUM_AXES];
+volatile CurrentPosition coordinate;
 
 /*Function: plan-move
  * - plan the velocity profile base on calculated joint angle
@@ -23,92 +20,102 @@ volatile MotionProfile joint2;
  * Author: WN
  * Date: 2026/05/25
  */
-void plan_move(volatile MotionProfile *joint1, volatile MotionProfile *joint2,
-               volatile JointAngles_t *joints) {
-  // set vmin
-  joint1->current_vel = GLOBAL_VMIN;
-  joint2->current_vel = GLOBAL_VMIN;
+void plan_move(volatile MotionProfile *axes, volatile JointAngles_t *joints,
+               float z_target) {
 
-  //calculate angle diff
-  float diff1 = angleDiff(joints->theta1, joints->prev_theta1);
-  float diff2 = angleDiff(joints->theta2, joints->prev_theta2);
+  // J1/J2 have limited range (±150°/±145°) — every legal angle is unambiguous,
+  // so use the raw difference. Wrapping to ±180° can pick a shorter path that
+  // sweeps through the out-of-range dead zone.
+  float diff1 = joints->theta1 - joints->prev_theta1;
+  float diff2 = joints->theta2 - joints->prev_theta2;
+  //
+  float z_target_steps = z_mm_to_steps(z_target);
+
   // calculate delta, how far to move
   int32_t delta1 =
       (int32_t)roundf(diff1 / (MOTOR_ANGLE_RESOLUTION * M_PI / 180.0f));
   int32_t delta2 =
       (int32_t)roundf(diff2 / (MOTOR_ANGLE_RESOLUTION * M_PI / 180.0f));
+  int32_t delta3 = (int32_t)roundf(z_target_steps - axes[AXIS_Z].total_steps);
 
   // assign direction base on delta
-  joint1->move_dir = (delta1 >= 0) ? COUNTER_CLOCKWISE : CLOCK_WISE;
-  joint2->move_dir = (delta2 >= 0) ? COUNTER_CLOCKWISE : CLOCK_WISE;
-  // set direction pin for the motor driver
-  if (joint1->move_dir == COUNTER_CLOCKWISE) {
-    //
-    tmc_set_direction(MOTOR_1, MOTOR_CCW);
-  } else if (joint1->move_dir == CLOCK_WISE) {
-    //
-    tmc_set_direction(MOTOR_1, MOTOR_CW);
-  }
-  if (joint2->move_dir == COUNTER_CLOCKWISE) {
-    //
-    // tmc_set_direction(MOTOR_2, 0);
-  } else if (joint2->move_dir == CLOCK_WISE) {
-    //
-    // tmc_set_direction(MOTOR_2, 1);
-  }
+  // Only flip J1 (the upside-down one), leave homing alone:
+  uint16_t dir1 = (delta1 >= 0) ? COUNTER_CLOCKWISE : CLOCK_WISE;
+  if (J1_DIR_INVERT) dir1 = -dir1;
+  axes[AXIS_J1].move_dir = dir1;
+
+  uint16_t dir2 = (delta2 >= 0) ? COUNTER_CLOCKWISE : CLOCK_WISE;
+  if (J2_DIR_INVERT) dir2 = -dir2;
+  axes[AXIS_J2].move_dir = dir1;
+
+  axes[AXIS_Z].move_dir = (delta3 >= 0) ? COUNTER_CLOCKWISE : CLOCK_WISE;
 
   //
-  joint1->target_steps = abs(delta1);
-  joint2->target_steps = abs(delta2);
+  axes[AXIS_J1].target_steps = labs(delta1);
+  axes[AXIS_J2].target_steps = labs(delta2);
+  axes[AXIS_Z].target_steps = labs(delta3);
 
-  // Assing global vmax and accel
-  float local_vmax_joint1 = GLOBAL_VMAX;
-  float local_vmax_joint2 = GLOBAL_VMAX;
-  joint1->accel = GLOBAL_ACCEL;
-  joint2->accel = GLOBAL_ACCEL;
+  ///////////////////////////////////////////////
+  int i = 0;
 
-  // Calculate distance to reach vmax
-  float d_accel_ideal_joint1 =
-      (local_vmax_joint1 * local_vmax_joint1) / (2.0f * joint1->accel);
-  float d_accel_ideal_joint2 =
-      (local_vmax_joint2 * local_vmax_joint2) / (2.0f * joint2->accel);
+  // set per-axis vmax and accel before the loop
+  axes[AXIS_J1].vmax = GLOBAL_VMAX;
+  axes[AXIS_J1].accel = GLOBAL_ACCEL;
 
-  // The TRIANGLE check
-  if ((2.0f * d_accel_ideal_joint1) > joint1->target_steps) {
-    //
-    joint1->d_accel = joint1->target_steps / 2;
+  axes[AXIS_J2].vmax = GLOBAL_VMAX;
+  axes[AXIS_J2].accel = GLOBAL_ACCEL;
 
-    // Calculate new lower peak velocity
-    local_vmax_joint1 = sqrtf(2.0f * joint1->accel * joint1->d_accel);
-  } else {
-    joint1->d_accel = d_accel_ideal_joint1;
+  axes[AXIS_Z].vmax = Z_VMAX;
+  axes[AXIS_Z].accel = Z_ACCEL;
+
+  // Calculate the traperzoidal velocity profile
+  for (i = 0; i < NUM_AXES; i++) {
+    // set vmin
+    axes[i].current_vel = GLOBAL_VMIN;
+    // set direction pin for the motor driver
+    if (axes[i].move_dir == COUNTER_CLOCKWISE) {
+      //
+      tmc_set_direction(axes[i].motor, MOTOR_CCW);
+    } else if (axes[i].move_dir == CLOCK_WISE) {
+      //
+      tmc_set_direction(axes[i].motor, MOTOR_CW);
+    }
+
+    // Assing global vmax and accel
+    float local_vmax = axes[i].vmax;
+    axes[i].accel = GLOBAL_ACCEL;
+
+    // Calculate distance to reach vmax
+    float d_accel_ideal = (local_vmax * local_vmax) / (2.0f * axes[i].accel);
+
+    // The TRIANGLE check
+    if ((2.0f * d_accel_ideal) > axes[i].target_steps) {
+      //
+      axes[i].d_accel = axes[i].target_steps / 2;
+
+      // Calculate new lower peak velocity
+      local_vmax = sqrtf(2.0f * axes[i].accel * axes[i].d_accel);
+    } else {
+      axes[i].d_accel = d_accel_ideal;
+    }
+    // Store the final Vmax
+    axes[i].v_max = local_vmax;
+
+    // Calculate d cruise
+    axes[i].d_cruise = axes[i].target_steps - (2.0f * axes[i].d_accel);
   }
-
-  if ((2.0f * d_accel_ideal_joint2) > joint2->target_steps) {
-    //
-    joint2->d_accel = joint2->target_steps / 2;
-
-    // Calculate new lower peak velocity
-    local_vmax_joint2 = sqrtf(2.0f * joint2->accel * joint2->d_accel);
-  } else {
-    joint2->d_accel = d_accel_ideal_joint2;
-  }
-
-  // Store the final Vmax
-  joint1->v_max = local_vmax_joint1;
-  joint2->v_max = local_vmax_joint2;
-
-  // Calculate d cruise
-  joint1->d_cruise = joint1->target_steps - (2.0f * joint1->d_accel);
-  joint2->d_cruise = joint2->target_steps - (2.0f * joint2->d_accel);
 
   // enable motor drivers
   tmc_enable(MOTOR_1);
-  // tmc_enable(MOTOR_2);
+  tmc_enable(MOTOR_2);
+  // tmc_enable(MOTOR_Z);
+
+  DEVICE_DELAY_US(100);
 
   // Update moving status
-  joint1->is_moving = true;
-  joint2->is_moving = true;
+  axes[AXIS_J1].is_moving = true;
+  axes[AXIS_J2].is_moving = true;
+  //  axes[AXIS_Z].is_moving = true;
 }
 
 /*Function: update_velocity_profile
@@ -120,49 +127,42 @@ void plan_move(volatile MotionProfile *joint1, volatile MotionProfile *joint2,
  * Author: WN
  * Date: 2026/05/25
  */
-void update_velocity_profile(volatile MotionProfile *joint) {
+void update_velocity_profile(volatile MotionProfile *axis) {
   // find out which part of the velocity profile we're in
   // Acceleration state
-  if (joint->current_step <= joint->d_accel) {
-    joint->current_vel += joint->accel * DT;
+  if (axis->current_step <= axis->d_accel) {
+    axis->current_vel += axis->accel * DT;
   }
   // Cruise state at v max
-  else if (joint->current_step > joint->d_accel &&
-           joint->current_step <= joint->d_accel + joint->d_cruise) {
-    joint->current_vel = joint->v_max;
+  else if (axis->current_step > axis->d_accel &&
+           axis->current_step <= axis->d_accel + axis->d_cruise) {
+    axis->current_vel = axis->v_max;
   }
   // Deceleration state
-  else if (joint->current_step > joint->d_accel + joint->d_cruise &&
-           joint->current_step <= joint->target_steps) {
-    joint->current_vel -= joint->accel * DT;
+  else if (axis->current_step > axis->d_accel + axis->d_cruise &&
+           axis->current_step <= axis->target_steps) {
+    axis->current_vel -= axis->accel * DT;
   }
 }
 
-void move_complete(volatile MotionProfile *joint1,
-                   volatile MotionProfile *joint2,
-                   volatile JointAngles_t *joints) {
-
+void move_complete(volatile MotionProfile *axes) {
   // disnable motor driver once move is done
   tmc_disable(MOTOR_1);
-  // tmc_disable(MOTOR_2);
-  //  reset after a move
-  joint1->target_steps = 0;
-  joint1->current_step = 0;
-  joint1->v_max = 0;
-  joint1->accel = 0;
-  joint1->d_accel = 0;
-  joint1->d_cruise = 0;
-  joint1->current_vel = 0;
-  joint1->is_moving = false;
+  tmc_disable(MOTOR_2);
+  // tmc_disable(MOTOR_Z);
 
-  joint2->target_steps = 0;
-  joint2->current_step = 0;
-  joint2->v_max = 0;
-  joint2->accel = 0;
-  joint2->d_accel = 0;
-  joint2->d_cruise = 0;
-  joint2->current_vel = 0;
-  joint2->is_moving = false;
+  int i = 0;
+  //  reset after a move
+  for (i = 0; i < NUM_AXES; i++) {
+    axes[i].target_steps = 0;
+    axes[i].current_step = 0;
+    axes[i].v_max = 0;
+    axes[i].accel = 0;
+    axes[i].d_accel = 0;
+    axes[i].d_cruise = 0;
+    axes[i].current_vel = 0;
+    axes[i].is_moving = false;
+  }
 }
 /*Function:  motion_profile_initialize
  * - initialize value in the MotionProfile struct to know value
@@ -173,33 +173,41 @@ void move_complete(volatile MotionProfile *joint1,
  * Author: WN
  * Date: 2026/05/25
  */
-void motion_profile_initialize(volatile MotionProfile *joint1,
-                               volatile MotionProfile *joint2) {
-  joint1->target_steps = 0;
-  joint1->current_step = 0;
-  joint1->total_steps = 0;
-  joint1->step_accumulator = 0;
-  joint1->v_max = 0;
-  joint1->accel = 0;
-  joint1->d_accel = 0;
-  joint1->d_cruise = 0;
-  joint1->current_vel = 0;
-  joint1->move_dir = HOME;
-  joint1->is_moving = false;
-  //
-  joint2->target_steps = 0;
-  ;
-  joint2->current_step = 0;
-  joint2->total_steps = 0;
-  joint2->step_accumulator = 0;
-  joint2->v_max = 0;
-  joint2->accel = 0;
-  joint2->d_accel = 0;
-  joint2->d_cruise = 0;
-  joint2->current_vel = 0;
-  joint2->move_dir = HOME;
-  joint2->is_moving = false;
+void motion_profile_initialize(volatile MotionProfile *axes) {
+  int i = 0;
+  for (i = 0; i < NUM_AXES; i++) {
+    axes[i].vmax = 0;
+    axes[i].target_steps = 0;
+    axes[i].current_step = 0;
+    axes[i].total_steps = 0;
+    axes[i].step_accumulator = 0;
+    axes[i].v_max = 0;
+    axes[i].accel = 0;
+    axes[i].d_accel = 0;
+    axes[i].d_cruise = 0;
+    axes[i].current_vel = 0;
+    axes[i].move_dir = HOME;
+    axes[i].is_moving = false;
+  }
+
+  axes[AXIS_J1].motor = MOTOR_1;
+  axes[AXIS_J2].motor = MOTOR_2;
+  axes[AXIS_Z].motor = MOTOR_Z;
+
+  axes[AXIS_J1].motor_address = TMC_ADDR_0;
+  axes[AXIS_J2].motor_address = TMC_ADDR_1;
+  axes[AXIS_Z].motor_address = TMC_ADDR_Z;
 }
+
+void coordinate_initialize(volatile CurrentPosition *coordinate) {
+  coordinate->x = 0;
+  coordinate->y = 0;
+  coordinate->z = 0;
+}
+
+float z_mm_to_steps(float mm) { return mm * Z_STEPS_PER_MM; }
+
+float z_steps_to_mm(float steps) { return steps / Z_STEPS_PER_MM; }
 
 /*Function:  cpuTimer1_ISR
  * - Interrupt of timer 1 going at user specify rate, to update and drive the
@@ -210,54 +218,32 @@ void motion_profile_initialize(volatile MotionProfile *joint1,
  * Date: 2026/05/25
  */
 void cpuTimer1_ISR(void) {
-  // step_state_joint1 = !step_state_joint1;
-  // step_state_joint2 = !step_state_joint2;
-  //  1. Trapezoidal velocity math for Joint 1
-  if (joint1.is_moving) {
-    update_velocity_profile(&joint1); // update current veloccity based on current step taken
-    joint1.step_accumulator +=joint1.current_vel *DT; // step accumulator increase faster or slower depend on current vel
-    if (joint1.step_accumulator >= 1.0f) {
-      // toggle driver pin
-      tmc_step(MOTOR_1);
-      // reset once move is initiate, -1 to keep motor from drifting
-      joint1.step_accumulator -= 1.0f;
-      // increase or decrease total step counter base on direction
-      joint1.total_steps += joint1.move_dir;
-      // increase current step counter
-      joint1.current_step++;
-      if (joint1.current_step >= joint1.target_steps) {
-        joint1.is_moving = false;
-        joint1.current_vel = 0.0f;   // prevent phantom steps
-        joint1.step_accumulator = 0.0f; 
+  int i = 0;
+  for (i = 0; i < NUM_AXES; i++) {
+    if (axes[i].is_moving) {
+      update_velocity_profile(&axes[i]); // update current veloccity based
+                                         // on current step taken
+      axes[i].step_accumulator +=
+          axes[i].current_vel * DT; // step accumulator increase faster or
+                                    // slower depend on current vel
+      if (axes[i].step_accumulator >= 1.0f) {
+        // toggle driver pin
+        tmc_step(axes[i].motor);
+        // reset once move is initiate, -1 to keep motor from drifting
+        axes[i].step_accumulator -= 1.0f;
+        // increase or decrease total step counter base on direction
+        axes[i].total_steps += axes[i].move_dir;
+        // increase current step counter
+        axes[i].current_step++;
+        if (axes[i].current_step >= axes[i].target_steps) {
+          axes[i].is_moving = false;
+          axes[i].current_vel = 0.0f; // prevent phantom steps
+          axes[i].step_accumulator = 0.0f;
+        }
       }
     }
   }
-
-  // 2. Repeat for Joint 2 (Keeps links perfectly in sync)
-  if (joint2.is_moving) {
-    update_velocity_profile(
-        &joint2); // update current veloccity based on current step taken
-    joint2.step_accumulator +=
-        joint2.current_vel *
-        DT; // step accumulator increase faster or slower depend on current vel
-    if (joint2.step_accumulator >= 1.0f) {
-      // toggle driver pin
-      // tmc_step(MOTOR_2);
-      // reset once move is initiate, -1 to keep motor from drifting
-      joint2.step_accumulator -= 1.0f;
-      // increase or decrease total step counter base on direction
-      joint2.total_steps += joint2.move_dir;
-      // increase current step counter
-      joint2.current_step++;
-      if (joint2.current_step >= joint2.target_steps) {
-        joint2.is_moving = false;
-        joint2.current_vel = 0.0f;   // prevent phantom steps
-        joint2.step_accumulator = 0.0f; 
-      }
-    }
-  }
-
-  //tmc_step(MOTOR_1);
-  //  clear interrup flag
+  // tmc_step(MOTOR_1);
+  //   clear interrup flag
   CPUTimer_clearOverflowFlag(CPUTIMER1_BASE);
 }
