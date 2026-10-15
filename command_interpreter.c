@@ -2,10 +2,9 @@
 #include "system.h"
 #include "usci.h"
 #include <errno.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <strings.h>
-
 
 /*Function: usciInit
  * - initialize the structure CMD that is use to store user input and all of the
@@ -17,19 +16,26 @@
  * */
 void command_Inittialize(CMD *cmdList) {
   int i = 0;
+  int j = 0;
+  int16_t nArgs[NUM_COMMANDS] = {CMD0_NARGS, CMD1_NARGS, CMD2_NARGS, CMD3_NARGS,
+                                 CMD4_NARGS, CMD5_NARGS, CMD6_NARGS, CMD7_NARGS};
+
   // initialize the command name
   cmdList[INDEX_MOVE].name = CMD0;
   cmdList[INDEX_HOME].name = CMD1;
   cmdList[INDEX_JOG].name = CMD2;
-  // initialize the number of arguments in each command
-  cmdList[INDEX_MOVE].nargs = CMD0_NARGS;
-  cmdList[INDEX_HOME].nargs = CMD1_NARGS;
-  cmdList[INDEX_JOG].nargs = CMD2_NARGS;
-  // initialize the argument array
-  for (i = 0; i < MAX_ARG; i++) {
-    cmdList[INDEX_MOVE].args[i] = 0;
-    cmdList[INDEX_HOME].args[i] = 0;
-    cmdList[INDEX_JOG].args[i] = 0;
+  cmdList[INDEX_TEACH].name = CMD3;
+  cmdList[INDEX_END].name = CMD4;
+  cmdList[INDEX_RECORD].name = CMD5;
+  cmdList[INDEX_ADD_DELAY].name = CMD6;
+  cmdList[INDEX_RUN].name = CMD7;
+  // initialize the argument array and the number of argument for each command
+  for (j = 0; j < NUM_COMMANDS; j++) {
+    cmdList[j].nargs = nArgs[j];
+    cmdList[j].joint = -1;
+    for (i = 0; i < MAX_ARG; i++) {
+      cmdList[j].args[i] = 0;
+    }
   }
 }
 /*Function: command_selection
@@ -52,12 +58,13 @@ void command_Selection(void) {
   ANSI_sequence(CURSOR_DOWN_1LINE);
   ANSI_sequence(CURSOR_DOWN_1LINE);
 
-  strcpy(buffer, "MOVE X_coordinate, Y_coordinate, Z_coordinate");
+  strcpy(buffer, "MOVE X Y Z");
   SCIA_TXstr(buffer);
   ANSI_sequence(CURSOR_DOWN_1LINE);
 
-  strcpy(buffer,
-         "Function: allow user to move TCP to their desire x & y & z coordiate.");
+  strcpy(buffer, "Function: allow user to move TCP to their desire x & y & z "
+                 "coordiate\r\nArgument: X - x coordinate in mm\r\n          Y - y "
+                 "coordinate in mm\r\n          Z- z absolute distance in mm");
   SCIA_TXstr(buffer);
   ANSI_sequence(CURSOR_DOWN_1LINE);
   ANSI_sequence(CURSOR_DOWN_1LINE);
@@ -67,17 +74,69 @@ void command_Selection(void) {
   ANSI_sequence(CURSOR_DOWN_1LINE);
 
   strcpy(buffer, "Function: home the TCP to x:0 and y:0 also hard reset the "
-                 "coordinate values");
+                 "coordinate values\r\nArgument: NONE");
   SCIA_TXstr(buffer);
   ANSI_sequence(CURSOR_DOWN_1LINE);
   ANSI_sequence(CURSOR_DOWN_1LINE);
 
-  strcpy(buffer, "USER DRIVE speed");
+  strcpy(buffer, "JOG Joint Distance");
   SCIA_TXstr(buffer);
   ANSI_sequence(CURSOR_DOWN_1LINE);
 
-  strcpy(buffer, "Function: allow user to drive the TCP with their desire "
-                 "speed from 0 to 100");
+  strcpy(
+      buffer,
+      "Function: allow user to drive any axis by increment or decrement value "
+      "of the input\r\nArgument: Joint - J1,J2,Z to choose axis to jog "
+      "\r\n          Distance - angle input in degree or z distance in mm");
+  SCIA_TXstr(buffer);
+  ANSI_sequence(CURSOR_DOWN_1LINE);
+  ANSI_sequence(CURSOR_DOWN_1LINE);
+
+  strcpy(buffer, "TEACH");
+  SCIA_TXstr(buffer);
+  ANSI_sequence(CURSOR_DOWN_1LINE);
+
+  strcpy(buffer,
+         "Function: Mark the start of teaching mode\r\nArgument: NONE");
+  SCIA_TXstr(buffer);
+  ANSI_sequence(CURSOR_DOWN_1LINE);
+  ANSI_sequence(CURSOR_DOWN_1LINE);
+
+  strcpy(buffer, "END");
+  SCIA_TXstr(buffer);
+  ANSI_sequence(CURSOR_DOWN_1LINE);
+
+  strcpy(buffer, "Function: Mark the end of teaching mode\r\nArgument: NONE");
+  SCIA_TXstr(buffer);
+  ANSI_sequence(CURSOR_DOWN_1LINE);
+  ANSI_sequence(CURSOR_DOWN_1LINE);
+
+  strcpy(buffer, "RECORD");
+  SCIA_TXstr(buffer);
+  ANSI_sequence(CURSOR_DOWN_1LINE);
+
+  strcpy(buffer, "Function: Record the last move "
+                 "in teach mode\r\nArgument: NONE");
+  SCIA_TXstr(buffer);
+  ANSI_sequence(CURSOR_DOWN_1LINE);
+  ANSI_sequence(CURSOR_DOWN_1LINE);
+
+  strcpy(buffer, "ADD_DELAY time");
+  SCIA_TXstr(buffer);
+  ANSI_sequence(CURSOR_DOWN_1LINE);
+
+  strcpy(buffer, "Function: add a delay in ms in between last recorded move "
+                 "and next record move\r\nArgument: time - A number "
+                 "represent the delay time in millisecond");
+  SCIA_TXstr(buffer);
+  ANSI_sequence(CURSOR_DOWN_1LINE);
+  ANSI_sequence(CURSOR_DOWN_1LINE);
+
+  strcpy(buffer, "RUN");
+  SCIA_TXstr(buffer);
+  ANSI_sequence(CURSOR_DOWN_1LINE);
+
+  strcpy(buffer, "Function: play back recorded move in teach mode\r\nArgument: None");
   SCIA_TXstr(buffer);
   ANSI_sequence(CURSOR_DOWN_1LINE);
   ANSI_sequence(CURSOR_DOWN_1LINE);
@@ -105,25 +164,36 @@ int command_Parser(CMD *cmdList, char *userInput) {
   char seps[] = " ";
   char *tok = NULL;
   char *pEnd = NULL;
-  // error code
-  ParseError errorCode = PARSE_OK;
 
   // tokenize the first part of the input string
   tok = strtok(userInput, seps);
   // if no command name were found
   if (tok == NULL) {
-    errorCode = PARSE_ERROR;
-    // check error code
-    if (error_Handling(errorCode)) {
-      return -1;
-    }
+    strcpy(buffer, "\r\nDid not find any command name, please try again.\r\n");
+    SCIA_TXstr(buffer);
+    return -1;
   }
   // validate command name if found something
   else {
-    index = commmand_Validate(cmdList, tok, &errorCode);
-    // check error code
-    if (error_Handling(errorCode)) {
+    index = commmand_Validate(cmdList, tok);
+    // check for error
+    if (index == -1) {
+      strcpy(buffer, "\r\nWrong command name, please try again.\r\n");
+      SCIA_TXstr(buffer);
       return -1;
+    }
+  }
+
+  // validate joint input, for JOG command only
+  if (index == INDEX_JOG) {
+    tok = strtok(NULL, seps);
+    int joint = parseJoint(tok);
+    if (joint == -1) {
+      strcpy(buffer, "\r\nwrong input to select axis.\r\n");
+      SCIA_TXstr(buffer);
+      return -1;
+    } else {
+      cmdList[index].joint = joint;
     }
   }
 
@@ -131,55 +201,36 @@ int command_Parser(CMD *cmdList, char *userInput) {
   for (i = 0; i < cmdList[index].nargs; i++) {
     // keep tokenize the input string
     tok = strtok(NULL, seps);
-    // test
-    sprintf(buffer, "\r\ninput is %s\r\n", tok);
-    SCIA_TXstr(buffer);
     // if found no trailing argument
     if (tok == NULL) {
-      errorCode = PARSE_INVALID_ARG;
-      // check error code
-      if (error_Handling(errorCode)) {
-        return -1;
-      }
+      strcpy(buffer, "\r\nPlease enter the argument.\r\n");
+      SCIA_TXstr(buffer);
+      return -1;
     }
     // if found something, continue to validate it
     else {
-      errno = 0; // 
+      errno = 0;
       val = strtof(tok, &pEnd);
       // check if there are extra character behind
       if (*pEnd != '\0') {
-        errorCode = PARSE_INVALID_ARG;
-        // check error code
-        if (error_Handling(errorCode)) {
-          return -1;
-        }
+        strcpy(buffer, "\r\nExtra character behind argument.\r\n");
+        SCIA_TXstr(buffer);
+        return -1;
       }
       // over flown character
       else if (errno == ERANGE) {
-        errorCode = PARSE_OVERFLOW;
-        // check error code
-        if (error_Handling(errorCode)) {
-          return -1;
-        }
+        strcpy(buffer, "\r\nOverflown input.\r\n");
+        SCIA_TXstr(buffer);
+        return -1;
       }
-      //check for argument value range 
-      //if input value biger than int16 range (change to the x & y range of
-      // robot)
+      // check for argument value range
+      // if input value biger than int16 range (change to the x & y range of
+      //  robot)
       else if (val < -32768 || val > 32768) {
-        errorCode = PARSE_OVERFLOW;
-        // check error code
-        if (error_Handling(errorCode)) {
-          return -1;
-        }
+        strcpy(buffer, "\r\nInput value outside of int16 range.\r\n");
+        SCIA_TXstr(buffer);
+        return -1;
       }
-      //check if value is in operating range of the robot design
-      /*if(argument_Validate(val, index))
-      {
-        errorCode = PARSE_OVERFLOW;
-        if (error_Handling(errorCode)) {
-          return -1;
-        }
-      }*/
       // store agument once pass validation
       cmdList[index].args[i] = val;
     }
@@ -198,7 +249,7 @@ int command_Parser(CMD *cmdList, char *userInput) {
  * Author: WN
  * Date: 2026/04/22
  * */
-int commmand_Validate(CMD *cmdList, char *cmdName, ParseError *errorCode) {
+int commmand_Validate(CMD *cmdList, char *cmdName) {
   int found_command = -1;
   int i = 0;
 
@@ -209,12 +260,10 @@ int commmand_Validate(CMD *cmdList, char *cmdName, ParseError *errorCode) {
     found_command = strcmp(cmdName, cmdList[i].name);
     // exit the loop immediately if found a matching command
     if (found_command == 0) {
-      *errorCode = PARSE_OK;
       return i;
     }
   }
-  // return -1 if did not find any matching command, also set error state
-  *errorCode = PARSE_INVALID_CMD;
+  // return -1 if did not find any matching command
   return -1;
 }
 /*Function: error_handling
@@ -285,21 +334,31 @@ int error_Handling(ParseError errorCode) {
 int command_Getter(char *userInput) {
   // local variable
   int error = 0;
-  ParseError errorCode = PARSE_OK;
+  char buffer[MAX_BUFF_SIZE] = {0};
 
   // call the function to get user input
   error = SCIA_RXstr(userInput);
   // if user input is longer than max character allowed, set error flag
   if (error == -1) {
-    errorCode = PARSE_OVERFLOW;
-  }
-
-  if (error_Handling(errorCode)) {
+    strcpy(buffer, "\r\nInput exceed allowed characters.\r\n");
+    SCIA_TXstr(buffer);
     return -1;
-  } else {
+  } 
+  else {
     return 0;
   }
 }
+
+int parseJoint(const char *tok) {
+  if (strcmp(tok, "J1") == 0)
+    return 0;
+  if (strcmp(tok, "J2") == 0)
+    return 1;
+  if (strcmp(tok, "Z") == 0)
+    return 2;
+  return -1; // invalid
+}
+
 /*Function: argument_Validate
  * validate val base on which index command it is
  * Argument: long val, int index
@@ -310,24 +369,22 @@ int command_Getter(char *userInput) {
  * Author: WN
  * Date: 2026/04/22
  * */
-int argument_Validate(long val, int index)
-{
+int argument_Validate(long val, int index) {
   int i = 0;
 
   switch (index) {
   case INDEX_HOME:
-  i = 0;
-  break;
+    i = 0;
+    break;
 
   case INDEX_MOVE:
-  //needed robot design to bound X and Y value, visit later
-  i= 0;
-  break;
+    // needed robot design to bound X and Y value, visit later
+    i = 0;
+    break;
 
   case INDEX_JOG:
-  i = 0;
-  break;
+    i = 0;
+    break;
   }
-return i;
+  return i;
 }
-

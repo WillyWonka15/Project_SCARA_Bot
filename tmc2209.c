@@ -94,11 +94,6 @@ void tmc_gpio_init(void) {
     GPIO_setPadConfig(pins[i], GPIO_PIN_TYPE_STD);
     GPIO_writePin(pins[i], 0);
   }
-
-  // Disable both drivers on startup (EN active LOW, so write HIGH = disabled)
-  GPIO_writePin(TMC0_EN_PIN, 1);
-  GPIO_writePin(TMC1_EN_PIN, 1);
-  GPIO_writePin(TMC2_EN_PIN, 1);
 }
 
 // ─────────────────────────────────────────

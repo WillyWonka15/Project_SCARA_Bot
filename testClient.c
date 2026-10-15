@@ -7,12 +7,13 @@
  *
  */
 #include "command_execution.h"
+#include "homing_gpio.h"
 #include "system.h"
 #include "timer.h"
 #include "tmc2209.h"
 #include "usci.h"
-#include "homing_gpio.h"
 #include <stddef.h>
+
 
 void main(void) {
 
@@ -38,10 +39,9 @@ void main(void) {
 
   // initialize timer1 for velocity profile
   timer1_Initialize();
-  
+
   // initialize timer0 for sampling limit switch reading
   timer0_Initialize();
-
 
   // initialize SCIA module for UART to laptop
   SCIA_initialize();
@@ -76,9 +76,10 @@ void main(void) {
   Interrupt_enableGlobal();
   ERTM; // enable real time interrupt
 
+  // queue user to select a command
+  command_Selection();
   while (1) {
-    // queue user to select a command
-    command_Selection();
+
     while (1) {
       // get user input
       inputError = command_Getter(userInput);
@@ -93,7 +94,6 @@ void main(void) {
       }
     }
     command_execute(cmdList, index);
-    DEVICE_DELAY_US(1000000);
   }
 }
 

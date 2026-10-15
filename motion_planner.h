@@ -4,10 +4,10 @@
 #include "kinematics.h"
 
 #define GLOBAL_VMAX 8000.0f // steps/sec
-#define GLOBAL_VMIN 600.0f
-#define GLOBAL_ACCEL 12000.0f // step/sec^2
-#define Z_VMAX 3200.0f // step/sec
-#define Z_ACCEL 6400.0f // step/sec^2
+#define GLOBAL_VMIN 200.0f
+#define GLOBAL_ACCEL 10000.0f // step/sec^2
+#define Z_VMAX 1800.0f // step/sec
+#define Z_ACCEL 1500.0f // step/sec^2
 
 // motor
 #define MOTOR_STEPS_PER_REV 400.0f // 0.9 deg motor
@@ -17,7 +17,7 @@
 //#define MOTOR_ANGLE_RESOLUTION 0.1125f // calculate from degree
 
 #define Z_PITCH_MM 2.0 // 2mm per rev
-#define Z_STEPS_PER_MM      (((400 * 8) / Z_PITCH_MM))  // 1600 steps/mm
+#define Z_STEPS_PER_MM      (((400*2) / Z_PITCH_MM))  // 400 steps/mm
 
 
 //
@@ -44,6 +44,9 @@ typedef struct{
 
     // motor driver control config
     int16_t motor;
+    int16_t motor_en_pin;
+    int16_t motor_dir_pin;
+    int16_t motor_step_pin;
     char motor_address;
 } MotionProfile;
 
@@ -69,6 +72,8 @@ void motion_profile_initialize(volatile MotionProfile *axes);
 void coordinate_initialize(volatile CurrentPosition *coordinate);
 
 void plan_move(volatile MotionProfile *axes, volatile JointAngles_t *joints, float z_target);
+
+void plan_single_move(volatile MotionProfile *axes, volatile JointAngles_t *joints, int index);
 
 void update_velocity_profile(volatile MotionProfile *axis);
 

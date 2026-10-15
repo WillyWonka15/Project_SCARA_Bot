@@ -19,6 +19,9 @@
 #define TMC_REG_SGTHRS 0x40
 #define TMC_REG_PWMCONF 0x70
 #define TMC_REG_NODECONF 0x03
+#define TMC_REG_GSTAT 0x01
+#define TMC_REG_TPOWERDOWN 0x11
+#define TMC_REG_TPWMTHRS 0x13
 
 
 
@@ -52,7 +55,7 @@
 // Per-axis direction inversion (for upside-down mounts)
 #define J1_DIR_INVERT  1    // J1 motor mounted upside down
 #define J2_DIR_INVERT  1    // J2 motor mounted upside down
-#define Z_DIR_INVERT   0    // Z normal
+#define Z_DIR_INVERT   1    // Z normal
 
 //
 // Function declarations

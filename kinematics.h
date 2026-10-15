@@ -19,7 +19,7 @@
 #define THETA2_MIN_RAD  (-145.0f * M_PI/180.0f)   //  -145 degrees 
 #define THETA2_MAX_RAD  (145.0f * M_PI/180.0f)    // 145 degrees 
 
-#define Z_MAX_MM (300.0f)
+#define Z_MAX_MM (200.0f)
 #define Z_MIN_MM (0.0f)
 
 #define X_MAX  (270)
@@ -28,11 +28,13 @@
 //struct
 typedef struct {
     float theta1;           // shoulder angle in radian
+    float prev_theta1;      // previous angle in radian
     float theta2;           // elbow angle in radian
+    float prev_theta2;      // previous angle in radian
+    float z;         // z target in mm
+    float prev_z;
     int elbow_config;         // elbow config
     int prev_elbow_config;    // previous elbow config
-    float prev_theta1;      // previous angle in radian
-    float prev_theta2;      // previous angle in radian
 } JointAngles_t;
 
 
@@ -48,6 +50,8 @@ bool joints_in_limit(float *theta1, float *theta2);
 float angleDiff(float target, float current);
 
 bool solve_auto_config(float x, float y, volatile JointAngles_t *joints);
+
+bool solve_single_move(JointAngles_t *joints);
 
 void joint_angle_initialize(volatile JointAngles_t *joints);
 
